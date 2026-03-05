@@ -1,0 +1,17 @@
+# Credenciales sensibles
+.env
+firebase_credentials.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+uploads/
+
+# Node
+node_modules/
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log

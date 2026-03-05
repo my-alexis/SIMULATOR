@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Docente - EvalSystem</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2332;
+    --border: #1e2d40;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --error: #ef4444;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', sans-serif; min-height: 100vh; }
+
+  .bg-grid {
+    position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.02) 1px, transparent 1px);
+    background-size: 50px 50px; pointer-events: none; z-index: 0;
+  }
+
+  nav {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .nav-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  .nav-logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .nav-badge { background: rgba(124,58,237,0.2); border: 1px solid rgba(124,58,237,0.4); color: var(--accent2); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+
+  .btn-logout { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; transition: all 0.2s; }
+  .btn-logout:hover { border-color: var(--error); color: var(--error); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 40px 24px; position: relative; z-index: 1; }
+
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -1px; margin-bottom: 8px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px;
+    animation: fadeIn 0.5s ease both;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .stat-card:nth-child(2) { animation-delay: 0.1s; }
+  .stat-card:nth-child(3) { animation-delay: 0.2s; }
+  .stat-card:nth-child(4) { animation-delay: 0.3s; }
+
+  .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  .stat-value { font-size: 36px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.success { color: var(--success); }
+  .stat-value.warning { color: var(--warning); }
+  .stat-value.purple { color: var(--accent2); }
+
+  .toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px; gap: 16px;
+  }
+
+  .search-input {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 16px; color: var(--text); font-size: 14px; font-family: 'Space Grotesk', sans-serif;
+    outline: none; width: 280px; transition: all 0.2s;
+  }
+
+  .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,212,255,0.1); }
+  .search-input::placeholder { color: var(--muted); }
+
+  .filter-btns { display: flex; gap: 8px; }
+
+  .filter-btn {
+    padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: 1px solid var(--border); background: transparent;
+    color: var(--muted); font-family: 'Space Grotesk', sans-serif; transition: all 0.2s;
+  }
+
+  .filter-btn.active { background: rgba(0,212,255,0.1); border-color: var(--accent); color: var(--accent); }
+
+  .btn-registrar {
+    padding: 10px 20px; background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none; border-radius: 10px; color: white; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: 'Space Grotesk', sans-serif; transition: all 0.2s;
+  }
+
+  .btn-registrar:hover { opacity: 0.9; }
+
+  .table-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    overflow: hidden; animation: fadeIn 0.5s ease 0.4s both;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--surface2); }
+  th { padding: 14px 20px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+  td { padding: 16px 20px; font-size: 14px; border-top: 1px solid var(--border); vertical-align: middle; }
+  tr:hover td { background: rgba(0,212,255,0.02); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  }
+
+  .badge.entregado { background: rgba(16,185,129,0.15); color: var(--success); border: 1px solid rgba(16,185,129,0.3); }
+  .badge.pendiente { background: rgba(245,158,11,0.15); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
+
+  .nota-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px; font-weight: 700;
+  }
+
+  .nota-badge.alta { color: var(--success); }
+  .nota-badge.media { color: var(--warning); }
+  .nota-badge.baja { color: var(--error); }
+
+  .btn-detalle {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    font-family: 'Space Grotesk', sans-serif; transition: all 0.2s;
+  }
+
+  .btn-detalle:hover { border-color: var(--accent); color: var(--accent); }
+
+  .empty-state { padding: 60px; text-align: center; color: var(--muted); }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px); z-index: 200;
+    display: none; align-items: center; justify-content: center;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+    padding: 40px; width: 100%; max-width: 520px;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .modal h2 { font-size: 22px; font-weight: 700; margin-bottom: 24px; }
+
+  .modal-field { margin-bottom: 16px; }
+  .modal-field label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; }
+  .modal-field input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; color: var(--text); font-size: 14px; font-family: 'Space Grotesk', sans-serif; outline: none; transition: all 0.2s; }
+  .modal-field input:focus { border-color: var(--accent); }
+
+  .modal-btns { display: flex; gap: 12px; margin-top: 24px; }
+  .modal-btn-cancel { flex: 1; padding: 12px; background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 10px; cursor: pointer; font-family: 'Space Grotesk', sans-serif; transition: all 0.2s; }
+  .modal-btn-cancel:hover { border-color: var(--error); color: var(--error); }
+  .modal-btn-save { flex: 2; padding: 12px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; border-radius: 10px; color: white; font-weight: 600; cursor: pointer; font-family: 'Space Grotesk', sans-serif; }
+
+  /* Detalle modal */
+  .detalle-notas { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0; }
+  .detalle-nota-item { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+  .detalle-nota-item .lbl { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .detalle-nota-item .val { font-size: 22px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+  .detalle-retro { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; font-size: 14px; color: var(--muted); line-height: 1.7; }
+  .detalle-nota-final { text-align: center; padding: 20px; background: rgba(0,212,255,0.05); border: 1px solid var(--accent); border-radius: 12px; margin-bottom: 16px; }
+  .detalle-nota-final .val { font-size: 52px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+  .detalle-nota-final .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-icon">📊</div>
+    EvalSystem
+    <span class="nav-badge">Docente</span>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center">
+    <button class="btn-registrar" onclick="openModal()">+ Registrar alumno</button>
+    <button class="btn-logout" onclick="window.location.href='/logout'">Cerrar sesión</button>
+  </div>
+</nav>
+
+<main>
+  <h1>Panel de Resultados</h1>
+  <p class="subtitle">Monitoreo en tiempo real de entregas y calificaciones</p>
+
+  <!-- SECCIÓN CONFIGURACIÓN DEL EXAMEN -->
+  <div id="configSection" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;margin-bottom:28px;animation:fadeIn 0.5s ease">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:4px">⚙️ Configuración del Examen</h2>
+        <p style="font-size:13px;color:var(--muted)">Define el horario. La IA calificará automáticamente al cerrar.</p>
+      </div>
+      <div id="estadoBadge" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600">--</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:16px;margin-bottom:20px">
+      <div>
+        <label style="display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Hora de inicio</label>
+        <input type="datetime-local" id="horaInicio" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:Space Grotesk,sans-serif;font-size:14px;outline:none">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Hora limite</label>
+        <input type="datetime-local" id="horaFin" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:Space Grotesk,sans-serif;font-size:14px;outline:none">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Titulo del examen</label>
+        <input type="text" id="tituloExamen" placeholder="Ej: Examen Final Excel 365" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:Space Grotesk,sans-serif;font-size:14px;outline:none">
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <button onclick="guardarConfig()" style="padding:10px 24px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:10px;color:white;font-size:13px;font-weight:600;cursor:pointer;font-family:Space Grotesk,sans-serif">💾 Guardar configuracion</button>
+      <button onclick="iniciarCalificacion()" style="padding:10px 24px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:10px;color:white;font-size:13px;font-weight:600;cursor:pointer;font-family:Space Grotesk,sans-serif">🤖 Calificar ahora</button>
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 18px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;font-size:13px;color:var(--muted)">⏱️ <span id="countdown">Sin configurar</span></div>
+    </div>
+  </div>
+
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total alumnos</div>
+      <div class="stat-value accent" id="statTotal">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Entregaron</div>
+      <div class="stat-value success" id="statEntregaron">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pendientes</div>
+      <div class="stat-value warning" id="statPendientes">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Promedio general</div>
+      <div class="stat-value purple" id="statPromedio">--</div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div style="display:flex;gap:12px;align-items:center">
+      <input class="search-input" type="text" id="searchInput" placeholder="🔍 Buscar alumno o código..." oninput="filtrarTabla()">
+      <div class="filter-btns">
+        <button class="filter-btn active" onclick="setFiltro('todos', this)">Todos</button>
+        <button class="filter-btn" onclick="setFiltro('entregaron', this)">Entregaron</button>
+        <button class="filter-btn" onclick="setFiltro('pendientes', this)">Pendientes</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-registrar" onclick="cargarDatos()" style="background:transparent;border:1px solid var(--border);color:var(--muted)">↻ Actualizar</button>
+      <button class="btn-registrar" onclick="procesarForms()" style="background:linear-gradient(135deg,#10b981,#059669)">⚡ Procesar Forms</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Estado</th>
+          <th>Nota Final</th>
+          <th>Fecha Entrega</th>
+          <th>Detalle</th>
+        </tr>
+      </thead>
+      <tbody id="tablaBody">
+        <tr><td colspan="6"><div class="empty-state"><div class="icon">⏳</div>Cargando datos...</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<!-- Modal registrar alumno -->
+<div class="modal-overlay" id="modalRegistrar">
+  <div class="modal">
+    <h2>Registrar alumno</h2>
+    <div class="modal-field">
+      <label>Código</label>
+      <input type="text" id="mCodigo" placeholder="Ej: 2024001">
+    </div>
+    <div class="modal-field">
+      <label>Nombre completo</label>
+      <input type="text" id="mNombre" placeholder="Ej: Juan Pérez">
+    </div>
+    <div class="modal-field">
+      <label>Contraseña</label>
+      <input type="text" id="mPassword" placeholder="Contraseña para el alumno">
+    </div>
+    <div class="modal-btns">
+      <button class="modal-btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="modal-btn-save" onclick="registrarAlumno()">Guardar alumno</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalle -->
+<div class="modal-overlay" id="modalDetalle">
+  <div class="modal" style="max-width:600px">
+    <h2 id="detalleNombre">Detalle del examen</h2>
+    <div class="detalle-nota-final">
+      <div class="lbl">Nota Final</div>
+      <div class="val" id="detalleNota">--</div>
+    </div>
+    <div class="detalle-notas" id="detalleNotas"></div>
+    <div class="detalle-retro" id="detalleRetro"></div>
+    <div class="modal-btns" style="margin-top:20px">
+      <button class="modal-btn-cancel" onclick="closeDetalleModal()" style="flex:1">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let todosAlumnos = [];
+  let filtroActual = 'todos';
+
+  async function cargarDatos() {
+    try {
+      const [resAlumnos, resStats] = await Promise.all([
+        fetch('/api/resultados'),
+        fetch('/api/estadisticas')
+      ]);
+      todosAlumnos = await resAlumnos.json();
+      const stats = await resStats.json();
+
+      document.getElementById('statTotal').textContent = stats.total;
+      document.getElementById('statEntregaron').textContent = stats.entregaron;
+      document.getElementById('statPendientes').textContent = stats.pendientes;
+      document.getElementById('statPromedio').textContent = stats.promedio_general;
+
+      renderTabla(todosAlumnos);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function renderTabla(alumnos) {
+    const tbody = document.getElementById('tablaBody');
+    const busqueda = document.getElementById('searchInput').value.toLowerCase();
+
+    let filtrados = alumnos.filter(a => {
+      const matchBusqueda = a.nombre?.toLowerCase().includes(busqueda) || a.codigo?.toLowerCase().includes(busqueda);
+      const matchFiltro = filtroActual === 'todos' ||
+        (filtroActual === 'entregaron' && a.entrego) ||
+        (filtroActual === 'pendientes' && !a.entrego);
+      return matchBusqueda && matchFiltro;
+    });
+
+    if (!filtrados.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon">📭</div>No se encontraron alumnos</div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtrados.map(a => {
+      const nota = a.nota_final;
+      const notaClass = nota >= 14 ? 'alta' : nota >= 11 ? 'media' : 'baja';
+      const fecha = a.fecha_entrega ? new Date(a.fecha_entrega).toLocaleString('es-PE') : '--';
+      return `<tr>
+        <td><span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted)">${a.codigo}</span></td>
+        <td style="font-weight:500">${a.nombre}</td>
+        <td>${a.entrego
+          ? '<span class="badge entregado">✓ Entregado</span>'
+          : '<span class="badge pendiente">⏳ Pendiente</span>'}</td>
+        <td>${nota !== null && nota !== undefined
+          ? `<span class="nota-badge ${notaClass}">${nota}</span>`
+          : '<span style="color:var(--muted)">--</span>'}</td>
+        <td style="font-size:13px;color:var(--muted)">${fecha}</td>
+        <td>${a.entrego
+          ? `<button class="btn-detalle" onclick='verDetalle(${JSON.stringify(a)})'>Ver detalle</button>`
+          : '--'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filtrarTabla() { renderTabla(todosAlumnos); }
+
+  function setFiltro(filtro, btn) {
+    filtroActual = filtro;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTabla(todosAlumnos);
+  }
+
+  function verDetalle(alumno) {
+    document.getElementById('detalleNombre').textContent = alumno.nombre;
+    document.getElementById('detalleNota').textContent = alumno.nota_final ?? '--';
+    
+    const ejercicios = ['ejercicio_1','ejercicio_2','ejercicio_3','ejercicio_4','ejercicio_5'];
+    const nombres = ['Ej. 1','Ej. 2','Ej. 3','Ej. 4','Ej. 5'];
+    const d = alumno.notas_detalle || {};
+    document.getElementById('detalleNotas').innerHTML = ejercicios.map((e, i) =>
+      `<div class="detalle-nota-item">
+        <div class="lbl">${nombres[i]}</div>
+        <div class="val">${d[e] ?? '--'}</div>
+      </div>`
+    ).join('');
+    
+    document.getElementById('detalleRetro').textContent = alumno.retroalimentacion || 'Sin retroalimentación';
+    document.getElementById('modalDetalle').classList.add('show');
+  }
+
+  function closeDetalleModal() { document.getElementById('modalDetalle').classList.remove('show'); }
+
+  function openModal() { document.getElementById('modalRegistrar').classList.add('show'); }
+  function closeModal() { document.getElementById('modalRegistrar').classList.remove('show'); }
+
+  async function registrarAlumno() {
+    const codigo = document.getElementById('mCodigo').value.trim();
+    const nombre = document.getElementById('mNombre').value.trim();
+    const password = document.getElementById('mPassword').value.trim();
+    if (!codigo || !nombre || !password) { alert('Completa todos los campos'); return; }
+
+    await fetch('/api/alumnos/registrar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo, nombre, password })
+    });
+
+    closeModal();
+    document.getElementById('mCodigo').value = '';
+    document.getElementById('mNombre').value = '';
+    document.getElementById('mPassword').value = '';
+    cargarDatos();
+  }
+
+  async function procesarForms() {
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '⏳ Procesando...';
+    try {
+      await fetch('/api/procesar-forms', { method: 'POST' });
+      setTimeout(() => { cargarDatos(); btn.disabled = false; btn.textContent = '⚡ Procesar Forms'; }, 5000);
+    } catch(e) {
+      btn.disabled = false;
+      btn.textContent = '⚡ Procesar Forms';
+    }
+  }
+
+  // Auto-refresh cada 30 segundos
+  cargarDatos();
+  setInterval(cargarDatos, 30000);
+
+  // ===== CONFIG EXAMEN =====
+  async function cargarConfig() {
+    try {
+      const res = await fetch("/api/config-examen");
+      const c = await res.json();
+      if (c.hora_inicio) document.getElementById("horaInicio").value = c.hora_inicio.slice(0,16);
+      if (c.hora_fin) document.getElementById("horaFin").value = c.hora_fin.slice(0,16);
+      if (c.titulo) document.getElementById("tituloExamen").value = c.titulo;
+      actualizarEstado(c);
+    } catch(e) {}
+  }
+
+  async function guardarConfig() {
+    const inicio = document.getElementById("horaInicio").value;
+    const fin = document.getElementById("horaFin").value;
+    const titulo = document.getElementById("tituloExamen").value || "Examen Final Excel 365";
+    if (!inicio || !fin) { alert("Por favor completa las horas de inicio y fin"); return; }
+    await fetch("/api/config-examen", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({activo: true, hora_inicio: inicio, hora_fin: fin, titulo})
+    });
+    alert("Configuracion guardada correctamente");
+    cargarConfig();
+  }
+
+  async function iniciarCalificacion() {
+    if (!confirm("Iniciar calificacion manual de todos los examenes entregados?")) return;
+    await fetch("/api/iniciar-calificacion", {method:"POST"});
+    alert("Calificacion iniciada. Las notas apareceran en minutos.");
+  }
+
+  function actualizarEstado(c) {
+    const badge = document.getElementById("estadoBadge");
+    const ahora = new Date();
+    const fin = c.hora_fin ? new Date(c.hora_fin) : null;
+    const inicio = c.hora_inicio ? new Date(c.hora_inicio) : null;
+    if (c.calificacion_completada) {
+      badge.textContent = "✅ Calificado";
+      badge.style.cssText = "padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3)";
+    } else if (fin && ahora > fin) {
+      badge.textContent = "🔒 Cerrado";
+      badge.style.cssText = "padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3)";
+    } else if (inicio && ahora >= inicio && fin && ahora <= fin) {
+      badge.textContent = "🟢 En curso";
+      badge.style.cssText = "padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3)";
+    } else if (inicio && ahora < inicio) {
+      badge.textContent = "⏳ Pendiente";
+      badge.style.cssText = "padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)";
+    } else {
+      badge.textContent = "Sin configurar";
+      badge.style.cssText = "padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;background:rgba(100,116,139,0.15);color:#64748b;border:1px solid rgba(100,116,139,0.3)";
+    }
+    if (fin) {
+      const diff = fin - ahora;
+      if (diff > 0) {
+        const h = Math.floor(diff/3600000);
+        const m = Math.floor((diff%3600000)/60000);
+        const s = Math.floor((diff%60000)/1000);
+        document.getElementById("countdown").textContent = diff > 0 ? h+"h "+m+"m "+s+"s restantes" : "Tiempo agotado";
+      } else {
+        document.getElementById("countdown").textContent = "Tiempo agotado";
+      }
+    }
+  }
+
+  setInterval(async () => {
+    try {
+      const res = await fetch("/api/config-examen");
+      const c = await res.json();
+      actualizarEstado(c);
+    } catch(e) {}
+  }, 1000);
+
+  cargarConfig();
+</script>
+</body>
+</html>
