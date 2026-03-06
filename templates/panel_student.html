@@ -342,7 +342,6 @@
   <div class="nav-right">
     <div class="nav-user">Bienvenido, <span>{{ nombre }}</span> · <span style="color:var(--muted)">{{ codigo }}</span></div>
     <button class="btn-logout" onclick="window.location.href='/logout'">Cerrar sesión</button>
-    <a href="/examen-entregado" style="padding:8px 16px;background:linear-gradient(135deg,#ef4444,#dc2626);border:none;border-radius:8px;color:white;font-size:13px;font-weight:600;cursor:pointer;font-family:Space Grotesk,sans-serif;text-decoration:none">🔒 Salir del Examen</a>
   </div>
 </nav>
 
@@ -352,51 +351,11 @@
     <p>Sigue los pasos para completar tu examen correctamente.</p>
   </div>
 
-  <div class="steps">
-    <div class="step active">
-      <div class="step-num">1</div>
-      Instalar SEB
-    </div>
-    <div class="step-arrow">→</div>
-    <div class="step">
-      <div class="step-num">2</div>
-      Descargar examen.seb
-    </div>
-    <div class="step-arrow">→</div>
-    <div class="step">
-      <div class="step-num">3</div>
-      Desarrollar examen
-    </div>
-    <div class="step-arrow">→</div>
-    <div class="step">
-      <div class="step-num">4</div>
-      Subir examen
-    </div>
-  </div>
-
-  <div class="cards-grid">
-    <div class="card">
-      <span class="card-icon">🔒</span>
-      <h3>Instalar SEB</h3>
-      <p>Descarga e instala Safe Exam Browser. Solo necesitas hacerlo una vez.</p>
-      <a href="{{ seb_installer_url }}" target="_blank" class="btn-download btn-outline">Descargar SEB</a>
-    </div>
-
-    <div class="card">
-      <span class="card-icon">⚙️</span>
-      <h3>Descargar Examen.seb</h3>
-      <p>Descarga este archivo para poder ingresar al aula virtual y desarrollar tu examen desde ahí.</p>
-      {% if seb_config_url %}
-      <a href="{{ seb_config_url }}" class="btn-download">Descargar examen.seb</a>
-      {% else %}
-      <button class="btn-download" disabled style="opacity:0.5">Próximamente</button>
-      {% endif %}
-    </div>
-
-    <div class="card">
+  <div style="display:flex;justify-content:center;margin-bottom:32px">
+    <div class="card" style="max-width:380px;width:100%;text-align:center">
       <span class="card-icon">📊</span>
       <h3>Archivo del Examen</h3>
-      <p>Descarga el Excel del examen, complétalo y luego súbelo en la sección de abajo.</p>
+      <p>Descarga el Excel del examen, complétalo y luego entrégalo usando el formulario de abajo.</p>
       <a href="{{ excel_url }}" class="btn-download">Descargar Excel</a>
     </div>
   </div>
@@ -414,7 +373,7 @@
         <li>Ingresa tu nombre completo y tu DNI: <strong style="color:var(--text)">{{ codigo }}</strong></li>
         <li>Sube el archivo Excel completado</li>
         <li>Envía el formulario</li>
-        <li>Regresa aquí y presiona <strong style="color:var(--accent)">"Verificar mi nota"</strong> 🤖</li>
+        <!--<li>Regresa aquí y presiona <strong style="color:var(--accent)">"Verificar mi nota"</strong> 🤖</li>-->
       </ol>
     </div>
 
@@ -436,13 +395,10 @@
     </a>
 
     <!-- Botón verificar nota -->
-    <button onclick="verificarNota()" class="btn-submit"
+    <!--<button onclick="verificarNota()" class="btn-submit"
       style="background:transparent;border:1px solid var(--border);color:var(--muted);margin-bottom:0">
       🔄 Verificar mi nota
-    </button>
-
-        <!-- Botón salir -->
-    <button onclick="window.location.href='/logout'" class="btn-submit" style="background:transparent;border:1px solid var(--error);color:var(--error);margin-top:16px;margin-bottom:0">🚪 Salir</button>
+    </button>-->
 
     <div class="alert" id="alertMsg"></div>
 
