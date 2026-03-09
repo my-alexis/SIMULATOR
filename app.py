@@ -48,19 +48,69 @@ SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/1OKrBXOXssQv8gMoBYLqBfF
 DOCENTE = {"email": "docente@evaluacion.com", "password": "profe2024", "rol": "docente"}
 
 
+# ==================== CACHE DE ALUMNOS ====================
+
+_cache_alumnos = {}
+_cache_timestamp = 0
+_cache_lock = threading.Lock()
+
+def get_alumnos_cache():
+    """Devuelve alumnos desde memoria. Refresca cada 5 minutos desde Firebase."""
+    global _cache_alumnos, _cache_timestamp
+    ahora = time.time()
+    with _cache_lock:
+        if ahora - _cache_timestamp > 300:  # refrescar cada 5 minutos
+            print("[Cache] Actualizando cache de alumnos desde Firebase...")
+            try:
+                docs = db.collection('alumnos').get()
+                _cache_alumnos = {}
+                for doc in docs:
+                    d = doc.to_dict()
+                    d['_doc_id'] = doc.id
+                    _cache_alumnos[d['codigo']] = d
+                _cache_timestamp = ahora
+                print(f"[Cache] {len(_cache_alumnos)} alumnos cargados en memoria")
+            except Exception as e:
+                print(f"[Cache] Error al cargar alumnos: {e}")
+    return _cache_alumnos
+
+def invalidar_cache():
+    """Fuerza recarga del cache en la próxima consulta."""
+    global _cache_timestamp
+    with _cache_lock:
+        _cache_timestamp = 0
+
+def precargar_cache():
+    """Precarga el cache al iniciar el servidor."""
+    time.sleep(3)  # esperar que Firebase conecte
+    get_alumnos_cache()
+    print("[Cache] Cache precargado al inicio")
+
+
 # ==================== CONFIGURACIÓN DEL EXAMEN ====================
 
+_cache_config = {}
+_cache_config_timestamp = 0
+
 def get_config_examen():
-    try:
-        doc = db.collection("config").document("examen").get()
-        if doc.exists:
-            return doc.to_dict()
-    except:
-        pass
+    global _cache_config, _cache_config_timestamp
+    ahora = time.time()
+    if ahora - _cache_config_timestamp > 30:  # refrescar cada 30 segundos
+        try:
+            doc = db.collection("config").document("examen").get()
+            if doc.exists:
+                _cache_config = doc.to_dict()
+                _cache_config_timestamp = ahora
+        except:
+            pass
+    if _cache_config:
+        return _cache_config
     return {"activo": False, "hora_inicio": None, "hora_fin": None, "titulo": "Examen Final Excel 365", "calificacion_iniciada": False, "calificacion_completada": False}
 
 def set_config_examen(data):
+    global _cache_config_timestamp
     db.collection("config").document("examen").set(data, merge=True)
+    _cache_config_timestamp = 0  # invalidar cache de config
 
 def examen_activo():
     config = get_config_examen()
@@ -79,6 +129,7 @@ def examen_cerrado():
     if not fin:
         return False
     return datetime.now().isoformat() > fin
+
 
 # ==================== RUTAS PRINCIPALES ====================
 
@@ -99,10 +150,10 @@ def login():
             session['rol'] = 'docente'
             return jsonify({'success': True, 'rol': 'docente'})
 
-        # Verificar si es alumno en Firebase
-        alumnos_ref = db.collection('alumnos').where('codigo', '==', codigo).where('password', '==', password).get()
-        if alumnos_ref:
-            alumno = alumnos_ref[0].to_dict()
+        # Verificar alumno desde CACHE (sin consultar Firebase)
+        alumnos = get_alumnos_cache()
+        alumno = alumnos.get(codigo)
+        if alumno and alumno.get('password') == password:
             session['usuario'] = codigo
             session['rol'] = 'alumno'
             session['nombre'] = alumno.get('nombre', '')
@@ -138,7 +189,7 @@ def logout():
 def examen_entregado():
     return render_template("examen_entregado.html")
 
-# ==================== API ALUMNOS ====================
+
 # ==================== API CONFIG EXAMEN ====================
 
 @app.route('/api/config-examen', methods=['GET'])
@@ -199,6 +250,7 @@ def calificar_todos_batch():
                 total += 1
                 print(f"[Batch] OK {d['nombre']} -> {resultado.get('nota_final')}")
     set_config_examen({'calificacion_completada': True})
+    invalidar_cache()
     print(f"[Batch] Completado: {total} alumnos calificados")
 
 def monitor_cierre_examen():
@@ -213,6 +265,8 @@ def monitor_cierre_examen():
             pass
         time.sleep(30)
 
+
+# ==================== API ALUMNOS ====================
 
 @app.route('/api/alumnos', methods=['GET'])
 def get_alumnos():
@@ -234,7 +288,9 @@ def registrar_alumno():
         'nota_final': None,
         'fecha_entrega': None
     })
+    invalidar_cache()  # refrescar cache al registrar nuevo alumno
     return jsonify({'success': True})
+
 
 # ==================== API EXAMEN ====================
 
@@ -247,39 +303,34 @@ def subir_examen():
     codigo = request.form.get('codigo', session.get('usuario', 'desconocido'))
     nombre = request.form.get('nombre', session.get('nombre', ''))
 
-    # Guardar archivo temporalmente
     filename = f"{codigo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     archivo.save(filepath)
 
-    # Calificar con IA
     resultado = calificar_con_ia(filepath, codigo, nombre)
 
-    # Guardar en Firebase
     alumnos_ref = db.collection('alumnos').where('codigo', '==', codigo).get()
     if alumnos_ref:
         doc_id = alumnos_ref[0].id
         db.collection('alumnos').document(doc_id).update({
             'entrego': True,
             'nota_final': resultado['nota_final'],
-            'notas_detalle': resultado['detalle'],
+            'notas_detalle': resultado.get('detalle', {}),
             'retroalimentacion': resultado['retroalimentacion'],
             'fecha_entrega': datetime.now().isoformat(),
             'archivo': filename
         })
-
+    invalidar_cache()
     return jsonify({'success': True, 'resultado': resultado})
+
 
 # ==================== CALIFICACIÓN CON IA ====================
 
 def calificar_con_ia(filepath, codigo, nombre):
-    # ========== MODO DEMO ==========
-    # Cambiar a False cuando tengas créditos en Anthropic
     MODO_DEMO = True
 
     if MODO_DEMO:
         return calificar_demo(nombre)
-    # ================================
 
     try:
         wb = openpyxl.load_workbook(filepath, data_only=True)
@@ -331,7 +382,6 @@ Responde SOLO en formato JSON así:
 
 
 def calificar_demo(nombre):
-    """Calificación simulada para pruebas sin créditos de API"""
     import random
     e1 = random.randint(12, 20)
     e2 = random.randint(10, 20)
@@ -339,20 +389,15 @@ def calificar_demo(nombre):
     e4 = random.randint(13, 20)
     e5 = random.randint(10, 20)
     nota_final = round((e1 + e2 + e3 + e4 + e5) / 5, 1)
-
     comentarios = [
-        f"Buen desempeño general. Se recomienda reforzar fórmulas avanzadas.",
-        f"Excelente manejo de macros VBA. Mejorar tablas dinámicas.",
-        f"Dominio aceptable del contenido. Practicar más funciones de búsqueda.",
-        f"Muy buen trabajo en formato condicional. Revisar ejercicio de macros.",
+        "Buen desempeño general. Se recomienda reforzar fórmulas avanzadas.",
+        "Excelente manejo de macros VBA. Mejorar tablas dinámicas.",
+        "Dominio aceptable del contenido. Practicar más funciones de búsqueda.",
+        "Muy buen trabajo en formato condicional. Revisar ejercicio de macros.",
     ]
-    import random
     return {
-        "ejercicio_1": e1,
-        "ejercicio_2": e2,
-        "ejercicio_3": e3,
-        "ejercicio_4": e4,
-        "ejercicio_5": e5,
+        "ejercicio_1": e1, "ejercicio_2": e2, "ejercicio_3": e3,
+        "ejercicio_4": e4, "ejercicio_5": e5,
         "nota_final": nota_final,
         "retroalimentacion": f"[DEMO] {random.choice(comentarios)}"
     }
@@ -367,6 +412,7 @@ def extraer_contenido_excel(wb):
             if any(fila):
                 contenido.append(' | '.join(fila))
     return '\n'.join(contenido)
+
 
 # ==================== API RESULTADOS ====================
 
@@ -383,8 +429,8 @@ def resetear_alumno():
             'notas_detalle': {},
             'retroalimentacion': ''
         })
+    invalidar_cache()
     return jsonify({'success': True})
-
 
 @app.route('/api/resultados', methods=['GET'])
 def get_resultados():
@@ -404,54 +450,32 @@ def get_resultados():
         })
     return jsonify(resultados)
 
-
 @app.route('/api/mi-nota', methods=['GET'])
 def mi_nota():
     codigo = request.args.get('codigo', session.get('usuario', ''))
     if not codigo:
         return jsonify({'error': 'No autorizado'}), 401
-    docs = db.collection('alumnos').where('codigo', '==', codigo).get()
-    if not docs:
+    # Buscar en cache primero
+    alumnos = get_alumnos_cache()
+    alumno = alumnos.get(codigo)
+    if not alumno:
         return jsonify({'entrego': False, 'nota_final': None})
-    d = docs[0].to_dict()
     return jsonify({
-        'entrego': d.get('entrego', False),
-        'nota_final': d.get('nota_final'),
-        'notas_detalle': d.get('notas_detalle', {}),
-        'retroalimentacion': d.get('retroalimentacion', ''),
-        'fecha_entrega': d.get('fecha_entrega', '')
+        'entrego': alumno.get('entrego', False),
+        'nota_final': alumno.get('nota_final'),
+        'notas_detalle': alumno.get('notas_detalle', {}),
+        'retroalimentacion': alumno.get('retroalimentacion', ''),
+        'fecha_entrega': alumno.get('fecha_entrega', '')
     })
-
-
-
-def get_resultados():
-    if session.get('rol') != 'docente':
-        return jsonify({'error': 'No autorizado'}), 401
-    
-    resultados = []
-    for doc in db.collection('alumnos').get():
-        d = doc.to_dict()
-        resultados.append({
-            'codigo': d.get('codigo', ''),
-            'nombre': d.get('nombre', ''),
-            'entrego': d.get('entrego', False),
-            'nota_final': d.get('nota_final'),
-            'notas_detalle': d.get('notas_detalle', {}),
-            'retroalimentacion': d.get('retroalimentacion', ''),
-            'fecha_entrega': d.get('fecha_entrega', '')
-        })
-    return jsonify(resultados)
 
 @app.route('/api/estadisticas', methods=['GET'])
 def get_estadisticas():
     if session.get('rol') != 'docente':
         return jsonify({'error': 'No autorizado'}), 401
-    
     alumnos = db.collection('alumnos').get()
     total = 0
     entregaron = 0
     notas = []
-    
     for doc in alumnos:
         d = doc.to_dict()
         total += 1
@@ -459,9 +483,7 @@ def get_estadisticas():
             entregaron += 1
             if d.get('nota_final') is not None:
                 notas.append(d['nota_final'])
-    
     promedio = sum(notas) / len(notas) if notas else 0
-    
     return jsonify({
         'total': total,
         'entregaron': entregaron,
@@ -471,14 +493,12 @@ def get_estadisticas():
         'nota_minima': min(notas) if notas else 0
     })
 
+
 # ==================== PROCESAMIENTO AUTOMÁTICO DE FORMS ====================
 
 def procesar_respuestas_forms():
-    """Lee el Google Sheets de respuestas y califica exámenes nuevos automáticamente"""
     import csv
-    
     try:
-        # Descargar CSV del Sheets de respuestas
         res = requests.get(SHEETS_CSV_URL, timeout=30)
         if res.status_code != 200:
             print(f"[Forms] Error al leer Sheets: {res.status_code}")
@@ -492,11 +512,9 @@ def procesar_respuestas_forms():
             print("[Forms] Sin respuestas nuevas")
             return
 
-        # Cabeceras: Marca temporal, NOMBRE Y APELLIDO, DNI, Sube tu examen
         for fila in filas[1:]:
             if len(fila) < 4:
                 continue
-
             timestamp = fila[0].strip()
             nombre    = fila[1].strip()
             dni       = fila[2].strip()
@@ -505,15 +523,11 @@ def procesar_respuestas_forms():
             if not dni or not file_url:
                 continue
 
-            # Verificar si ya fue procesado
             ya_procesado = db.collection('alumnos').where('codigo', '==', dni).where('entrego', '==', True).get()
             if ya_procesado:
                 continue
 
             print(f"[Forms] Procesando: {nombre} ({dni})")
-
-            # Descargar el archivo Excel desde Drive
-            # Convertir URL de Drive a descarga directa
             file_id = extraer_id_drive(file_url)
             if not file_id:
                 print(f"[Forms] No se pudo extraer ID del archivo: {file_url}")
@@ -521,22 +535,18 @@ def procesar_respuestas_forms():
 
             download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
             file_res = requests.get(download_url, timeout=60)
-
             if file_res.status_code != 200:
                 print(f"[Forms] Error al descargar archivo de {dni}")
                 continue
 
-            # Guardar temporalmente
             filename = f"{dni}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
             filepath = os.path.join(UPLOAD_FOLDER, filename)
             with open(filepath, 'wb') as f:
                 f.write(file_res.content)
 
-            # Calificar con IA
             resultado = calificar_con_ia(filepath, dni, nombre)
             print(f"[Forms] Nota de {nombre}: {resultado.get('nota_final')}")
 
-            # Guardar en Firebase
             alumnos_ref = db.collection('alumnos').where('codigo', '==', dni).get()
             if alumnos_ref:
                 doc_id = alumnos_ref[0].id
@@ -549,7 +559,6 @@ def procesar_respuestas_forms():
                     'archivo': filename
                 })
             else:
-                # Alumno no registrado → lo creamos automáticamente
                 db.collection('alumnos').add({
                     'codigo': dni,
                     'nombre': nombre,
@@ -561,7 +570,7 @@ def procesar_respuestas_forms():
                     'fecha_entrega': timestamp,
                     'archivo': filename
                 })
-
+            invalidar_cache()
             print(f"[Forms] ✅ {nombre} procesado correctamente")
 
     except Exception as e:
@@ -569,7 +578,6 @@ def procesar_respuestas_forms():
 
 
 def extraer_id_drive(url):
-    """Extrae el ID de un archivo de Google Drive desde su URL"""
     import re
     patrones = [
         r'/file/d/([a-zA-Z0-9_-]+)',
@@ -582,18 +590,14 @@ def extraer_id_drive(url):
             return match.group(1)
     return None
 
-
 def monitor_forms():
-    """Hilo que revisa Forms cada 2 minutos automáticamente"""
     print("[Monitor] Iniciando monitoreo automático de Forms...")
     while True:
         procesar_respuestas_forms()
-        time.sleep(120)  # cada 2 minutos
-
+        time.sleep(120)
 
 @app.route('/api/procesar-forms', methods=['POST'])
 def procesar_forms_manual():
-    """Endpoint para procesar Forms manualmente desde el panel del docente"""
     if session.get('rol') != 'docente':
         return jsonify({'error': 'No autorizado'}), 401
     threading.Thread(target=procesar_respuestas_forms).start()
@@ -601,9 +605,19 @@ def procesar_forms_manual():
 
 
 if __name__ == '__main__':
-    # Iniciar monitor automático en hilo separado
     monitor = threading.Thread(target=monitor_forms, daemon=True)
     monitor2 = threading.Thread(target=monitor_cierre_examen, daemon=True)
+    monitor3 = threading.Thread(target=precargar_cache, daemon=True)
     monitor2.start()
     monitor.start()
+    monitor3.start()
     app.run(debug=True, port=5000)
+
+# ==================== INICIO CON GUNICORN ====================
+# Precargar cache cuando inicia gunicorn
+_precarga = threading.Thread(target=precargar_cache, daemon=True)
+_precarga.start()
+_monitor_cierre = threading.Thread(target=monitor_cierre_examen, daemon=True)
+_monitor_cierre.start()
+_monitor_forms = threading.Thread(target=monitor_forms, daemon=True)
+_monitor_forms.start()
